@@ -27,4 +27,13 @@ router.get('/:id', (req, res, next) => {
   }
 });
 
+router.get('/:id/logs', (req, res, next) => {
+  try {
+    const logs = db.prepare('SELECT * FROM job_logs WHERE job_id = ? ORDER BY id ASC').all(req.params.id);
+    res.json(logs);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

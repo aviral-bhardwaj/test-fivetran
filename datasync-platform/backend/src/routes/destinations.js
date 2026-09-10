@@ -8,13 +8,13 @@ const router = express.Router();
 const createSchema = Joi.object({
   organization_id: Joi.number().integer().required(),
   name: Joi.string().required(),
-  type: Joi.string().valid('local_file', 'sqlite_warehouse').required(),
+  type: Joi.string().required(),
   config: Joi.object().required()
 });
 
 const updateSchema = Joi.object({
   name: Joi.string(),
-  type: Joi.string().valid('local_file', 'sqlite_warehouse'),
+  type: Joi.string(),
   config: Joi.object(),
   status: Joi.string()
 });

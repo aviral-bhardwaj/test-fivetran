@@ -1,16 +1,60 @@
 const { test, describe, after } = require('node:test');
 const assert = require('node:assert');
-const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
+const { Readable } = require('stream');
 
 process.env.DB_PATH = path.join(__dirname, 'node_test.db');
 const app = require('../src/index');
 const db = require('../src/db/connection');
 
+function request(appInstance) {
+  function makeCall(method, url, body = null) {
+    return new Promise((resolve) => {
+      const payload = body ? Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)) : null;
+      const req = payload ? Readable.from([payload]) : Readable.from([]);
+      req.method = method.toUpperCase();
+      req.url = url;
+      req.headers = {
+        'content-type': 'application/json',
+        ...(payload ? { 'content-length': String(payload.length) } : {})
+      };
+      req.connection = { remoteAddress: '127.0.0.1' };
+      req.socket = req.connection;
+      let resData = '';
+      const res = {
+        statusCode: 200,
+        headers: {},
+        setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
+        getHeader(k) { return this.headers[k.toLowerCase()]; },
+        writeHead(status, h) { this.statusCode = status; if (h) Object.assign(this.headers, h); },
+        write(chunk) { if (chunk) resData += chunk; },
+        end(chunk) {
+          if (chunk) resData += chunk;
+          let parsed = resData;
+          try { parsed = JSON.parse(resData); } catch (e) {}
+          resolve({ status: this.statusCode, headers: this.headers, body: parsed });
+        }
+      };
+      appInstance(req, res);
+    });
+  }
+
+  return {
+    get: (url) => makeCall('GET', url),
+    post: (url) => ({
+      send: (body) => makeCall('POST', url, body)
+    }),
+    put: (url) => ({
+      send: (body) => makeCall('PUT', url, body)
+    }),
+    delete: (url) => makeCall('DELETE', url)
+  };
+}
+
 describe('DataSync Platform API Integration Tests', () => {
   after(() => {
-    db.close();
+    // Keep statements alive for Node 24
     if (fs.existsSync(process.env.DB_PATH)) {
       try { fs.unlinkSync(process.env.DB_PATH); } catch (e) {}
     }
@@ -50,7 +94,7 @@ describe('DataSync Platform API Integration Tests', () => {
   });
 
   test('POST /api/connectors/:id/test should validate connection', async () => {
-    const res = await request(app).post(`/api/connectors/${connId}/test`);
+    const res = await request(app).post(`/api/connectors/${connId}/test`).send({});
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.success, true);
   });
@@ -80,7 +124,7 @@ describe('DataSync Platform API Integration Tests', () => {
   });
 
   test('POST /api/connections/:id/discover should discover schema', async () => {
-    const res = await request(app).post(`/api/connections/${connectionId}/discover`);
+    const res = await request(app).post(`/api/connections/${connectionId}/discover`).send({});
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.table, 'demo_users');
     assert.ok(Array.isArray(res.body.columns));
@@ -88,7 +132,7 @@ describe('DataSync Platform API Integration Tests', () => {
   });
 
   test('POST /api/connections/:id/sync should trigger sync job', async () => {
-    const res = await request(app).post(`/api/connections/${connectionId}/sync`);
+    const res = await request(app).post(`/api/connections/${connectionId}/sync`).send({});
     assert.strictEqual(res.status, 201);
     assert.strictEqual(res.body.status, 'pending');
   });
@@ -105,5 +149,47 @@ describe('DataSync Platform API Integration Tests', () => {
     assert.strictEqual(res.status, 200);
     assert.ok('total_syncs' in res.body);
     assert.ok('active_connections' in res.body);
+  });
+
+  test('GET /api/catalog/sources should return connector catalog', async () => {
+    const res = await request(app).get('/api/catalog/sources');
+    assert.strictEqual(res.status, 200);
+    assert.ok(Array.isArray(res.body));
+    assert.ok(res.body.length >= 10);
+    const github = res.body.find(c => c.id === 'github');
+    assert.ok(github);
+    assert.strictEqual(github.category, 'api');
+  });
+
+  test('GET /api/catalog/destinations should return destination catalog', async () => {
+    const res = await request(app).get('/api/catalog/destinations');
+    assert.strictEqual(res.status, 200);
+    assert.ok(Array.isArray(res.body));
+    assert.ok(res.body.length >= 5);
+  });
+
+  test('GET /api/catalog/sources/stripe/spec should return spec schema', async () => {
+    const res = await request(app).get('/api/catalog/sources/stripe/spec');
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.id, 'stripe');
+    assert.ok(res.body.spec.properties.api_key);
+  });
+
+  test('GET /api/syncs/:id/logs should return job execution logs', async () => {
+    // Run worker once to generate logs
+    const { runSync } = require('../src/services/syncEngine');
+    const conn = db.prepare('SELECT * FROM connections WHERE id = ?').get(connectionId);
+    const connector = db.prepare('SELECT * FROM connectors WHERE id = ?').get(conn.connector_id);
+    const dest = db.prepare('SELECT * FROM destinations WHERE id = ?').get(conn.destination_id);
+    const job = db.prepare('SELECT * FROM sync_jobs WHERE connection_id = ?').get(connectionId);
+
+    await runSync(job, conn, connector, dest);
+
+    const res = await request(app).get(`/api/syncs/${job.id}/logs`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(Array.isArray(res.body));
+    assert.ok(res.body.length > 0);
+    assert.ok(res.body[0].message);
+    assert.ok(res.body[0].level);
   });
 });

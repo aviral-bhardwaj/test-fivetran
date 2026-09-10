@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout/Layout'
 import Dashboard from './pages/Dashboard'
+import ConnectorCatalog from './pages/ConnectorCatalog'
 import Connectors from './pages/Connectors'
 import Destinations from './pages/Destinations'
 import Connections from './pages/Connections'
@@ -13,6 +14,7 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/catalog" element={<ConnectorCatalog />} />
         <Route path="/connectors" element={<Connectors />} />
         <Route path="/destinations" element={<Destinations />} />
         <Route path="/connections" element={<Connections />} />

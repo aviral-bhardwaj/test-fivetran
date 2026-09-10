@@ -11,11 +11,13 @@ const createSchema = Joi.object({
   name: Joi.string().required(),
   connector_id: Joi.number().integer().required(),
   destination_id: Joi.number().integer().required(),
-  source_table: Joi.string().required(),
+  source_table: Joi.string().allow('', null).optional().default('default'),
   schedule_minutes: Joi.number().integer().optional(),
   schedule_interval_minutes: Joi.number().integer().optional(),
-  sync_mode: Joi.string().valid('full', 'incremental').default('full'),
-  incremental_key: Joi.string().allow('', null).optional()
+  sync_mode: Joi.string().allow('full', 'incremental', 'full_refresh_overwrite', 'full_refresh_append', 'incremental_append', 'incremental_deduped').default('full'),
+  incremental_key: Joi.string().allow('', null).optional(),
+  sync_catalog: Joi.any().optional(),
+  prefix: Joi.string().allow('', null).optional()
 });
 
 router.get('/', (req, res, next) => {
@@ -36,18 +38,21 @@ router.get('/', (req, res, next) => {
 
 router.post('/', validate(createSchema), (req, res, next) => {
   try {
-    const { organization_id, name, connector_id, destination_id, source_table, schedule_minutes, schedule_interval_minutes, sync_mode, incremental_key } = req.body;
+    const { organization_id, name, connector_id, destination_id, source_table, schedule_minutes, schedule_interval_minutes, sync_mode, incremental_key, sync_catalog, prefix } = req.body;
     const interval = schedule_minutes || schedule_interval_minutes || 60;
+    const catalogJson = sync_catalog ? (typeof sync_catalog === 'string' ? sync_catalog : JSON.stringify(sync_catalog)) : '[]';
+    const destPrefix = prefix || 'airbyte_raw_';
+
     const result = db.prepare(`
       INSERT INTO connections 
-      (organization_id, name, connector_id, destination_id, source_table, schedule_minutes, sync_mode, incremental_key) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(organization_id, name, connector_id, destination_id, source_table, interval, sync_mode || 'full', incremental_key || null);
+      (organization_id, name, connector_id, destination_id, source_table, schedule_minutes, sync_mode, incremental_key, sync_catalog, prefix) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(organization_id, name, connector_id, destination_id, source_table || 'default', interval, sync_mode || 'full', incremental_key || null, catalogJson, destPrefix);
     
     res.status(201).json({ 
-      id: result.lastInsertRowid, organization_id, name, connector_id, destination_id, source_table, 
+      id: result.lastInsertRowid, organization_id, name, connector_id, destination_id, source_table: source_table || 'default', 
       schedule_minutes: interval, schedule_interval_minutes: interval, sync_mode: sync_mode || 'full', incremental_key,
-      is_active: 1, enabled: 1
+      sync_catalog: catalogJson, prefix: destPrefix, is_active: 1, enabled: 1
     });
   } catch (err) {
     next(err);
@@ -74,10 +79,13 @@ router.get('/:id', (req, res, next) => {
 
 router.put('/:id', (req, res, next) => {
   try {
-    const { name, schedule_minutes, sync_mode, source_table, incremental_key } = req.body;
+    const { name, schedule_minutes, schedule_interval_minutes, sync_mode, source_table, incremental_key, sync_catalog, prefix } = req.body;
     const conn = db.prepare('SELECT * FROM connections WHERE id = ?').get(req.params.id);
     if (!conn) return res.status(404).json({ error: 'Not found' });
     
+    const interval = schedule_minutes || schedule_interval_minutes;
+    const catalogJson = sync_catalog !== undefined ? (typeof sync_catalog === 'string' ? sync_catalog : JSON.stringify(sync_catalog)) : null;
+
     db.prepare(`
       UPDATE connections 
       SET name = COALESCE(?, name),
@@ -85,9 +93,11 @@ router.put('/:id', (req, res, next) => {
           sync_mode = COALESCE(?, sync_mode),
           source_table = COALESCE(?, source_table),
           incremental_key = COALESCE(?, incremental_key),
+          sync_catalog = COALESCE(?, sync_catalog),
+          prefix = COALESCE(?, prefix),
           updated_at = datetime('now')
       WHERE id = ?
-    `).run(name, schedule_minutes, sync_mode, source_table, incremental_key, req.params.id);
+    `).run(name, interval, sync_mode, source_table, incremental_key, catalogJson, prefix, req.params.id);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -144,10 +154,30 @@ const handleDiscoverSchema = async (req, res, next) => {
       config: connection.connector_config
     };
     
-    const schema = await schemaService.discoverSchema(connection, connector);
-    db.prepare('UPDATE connections SET schema_json = ? WHERE id = ?').run(JSON.stringify(schema), req.params.id);
+    const streamCatalog = await schemaService.discoverStreams(connector);
+    const tableSchema = await schemaService.discoverSchema(connection, connector);
+
+    const fullResult = {
+      table: connection.source_table || (streamCatalog.streams[0]?.name || 'default'),
+      columns: tableSchema.columns || [],
+      streams: streamCatalog.streams || []
+    };
+
+    // Auto-populate sync_catalog if not set
+    if (!connection.sync_catalog || connection.sync_catalog === '[]') {
+      const defaultCatalog = streamCatalog.streams.map(s => ({
+        name: s.name,
+        sync_mode: s.supportedSyncModes[0] || 'full_refresh_overwrite',
+        primary_key: s.sourceDefinedPrimaryKey?.[0]?.[0] || 'id',
+        cursor_field: s.defaultCursorField?.[0] || 'id',
+        enabled: true
+      }));
+      db.prepare('UPDATE connections SET sync_catalog = ? WHERE id = ?').run(JSON.stringify(defaultCatalog), req.params.id);
+    }
+
+    db.prepare('UPDATE connections SET schema_json = ? WHERE id = ?').run(JSON.stringify(fullResult), req.params.id);
     
-    res.json(schema);
+    res.json(fullResult);
   } catch (err) {
     next(err);
   }

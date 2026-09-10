@@ -33,3 +33,10 @@ export const getSync = (id) => api.get(`/syncs/${id}`);
 
 export const getHealth = () => api.get('/health');
 export const getMetrics = () => api.get('/metrics');
+
+export const getSourceCatalog = (params) => api.get('/catalog/sources', { params });
+export const getSourceSpec = (id) => api.get(`/catalog/sources/${id}/spec`);
+export const getDestinationCatalog = (params) => api.get('/catalog/destinations', { params });
+export const getDestinationSpec = (id) => api.get(`/catalog/destinations/${id}/spec`);
+export const getSyncLogs = (id) => api.get(`/syncs/${id}/logs`);
+

@@ -21,8 +21,9 @@ def setup_db():
 @pytest.fixture
 def client_with_sync_job():
     db = SessionLocal()
+    source_db_file = f"./test-source-{uuid.uuid4().hex}.db"
     try:
-        source_engine = create_engine("sqlite:///./test_source.db")
+        source_engine = create_engine(f"sqlite:///{source_db_file}")
         with source_engine.begin() as conn:
             conn.execute(text("CREATE TABLE IF NOT EXISTS src_users (id INTEGER PRIMARY KEY, name TEXT)"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS dest_users (id INTEGER PRIMARY KEY, name TEXT)"))
@@ -51,8 +52,8 @@ def client_with_sync_job():
             ),
             {
                 "org_id": org_id,
-                "source_cfg": '{"dsn":"sqlite:///./test_source.db","table":"src_users"}',
-                "dest_cfg": '{"dsn":"sqlite:///./test_source.db","table":"dest_users"}',
+                "source_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"src_users"}}',
+                "dest_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"dest_users"}}',
             },
         )
         connection_id = db.execute(text("SELECT id FROM connections ORDER BY id DESC LIMIT 1")).first()[0]
@@ -62,13 +63,16 @@ def client_with_sync_job():
         yield job_id
     finally:
         db.close()
+        if os.path.exists(source_db_file):
+            os.remove(source_db_file)
 
 
 @pytest.fixture
 def incremental_sync_job():
     db = SessionLocal()
+    source_db_file = f"./test-source-{uuid.uuid4().hex}.db"
     try:
-        source_engine = create_engine("sqlite:///./test_source.db")
+        source_engine = create_engine(f"sqlite:///{source_db_file}")
         with source_engine.begin() as conn:
             conn.execute(text("CREATE TABLE IF NOT EXISTS src_users (id INTEGER PRIMARY KEY, name TEXT)"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS dest_users (id INTEGER PRIMARY KEY, name TEXT)"))
@@ -98,8 +102,8 @@ def incremental_sync_job():
             ),
             {
                 "org_id": org_id,
-                "source_cfg": '{"dsn":"sqlite:///./test_source.db","table":"src_users","incremental_key":"id"}',
-                "dest_cfg": '{"dsn":"sqlite:///./test_source.db","table":"dest_users"}',
+                "source_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"src_users","incremental_key":"id"}}',
+                "dest_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"dest_users"}}',
                 "state_json": '{"cursor": 0}',
             },
         )
@@ -116,3 +120,5 @@ def incremental_sync_job():
         yield job_id, connection_id
     finally:
         db.close()
+        if os.path.exists(source_db_file):
+            os.remove(source_db_file)

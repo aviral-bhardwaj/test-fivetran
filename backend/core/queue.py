@@ -76,6 +76,7 @@ def mark_job_failed(db: Session, job: SyncJob, message: str) -> SyncJob:
         job.status = "failed"
         job.finished_at = now
         job.started_at = None
+        job.run_at = now
     else:
         backoff_seconds = settings.retry_base_delay_seconds * (2 ** (job.attempts - 1))
         job.status = "pending"

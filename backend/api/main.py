@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +14,8 @@ from backend.core.queue import enqueue_sync
 from backend.core.sync_engine import discover_schema
 
 app = FastAPI(title="Data Platform Control Plane", version="0.1.0")
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
 
 @app.on_event("startup")
@@ -82,3 +87,31 @@ def get_sync(sync_id: int, db: Session = Depends(get_db)):
 def list_connection_syncs(connection_id: int, db: Session = Depends(get_db)):
     stmt = select(SyncJob).where(SyncJob.connection_id == connection_id).order_by(SyncJob.id.desc())
     return list(db.execute(stmt).scalars().all())
+
+
+@app.get("/api/organizations", response_model=list[OrganizationOut])
+def list_organizations(db: Session = Depends(get_db)):
+    stmt = select(Organization).order_by(Organization.id.desc())
+    return list(db.execute(stmt).scalars().all())
+
+
+@app.get("/api/connections", response_model=list[ConnectionOut])
+def list_connections(db: Session = Depends(get_db)):
+    stmt = select(Connection).order_by(Connection.id.desc())
+    return list(db.execute(stmt).scalars().all())
+
+
+@app.get("/api/syncs", response_model=list[SyncOut])
+def list_all_syncs(db: Session = Depends(get_db)):
+    stmt = select(SyncJob).order_by(SyncJob.id.desc()).limit(100)
+    return list(db.execute(stmt).scalars().all())
+
+
+@app.get("/", include_in_schema=False)
+def serve_frontend():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+

@@ -65,6 +65,32 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Airbyte Quick Action Hero */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">Airbyte Engine Active</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 mt-1">Replication Overview</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Continuous sync pipelines, connector health, and stream throughput.</p>
+        </div>
+        <div className="flex gap-3">
+          <a
+            href="/catalog"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold border border-indigo-200 transition-all shadow-sm"
+          >
+            🏪 Connector Catalog (20+)
+          </a>
+          <a
+            href="/connections"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-indigo-500/20"
+          >
+            + New Connection
+          </a>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <MetricCard title="Total Syncs" value={metricsLoading ? '...' : metrics.totalSyncs} icon={Activity} color="blue" />
         <MetricCard title="Succeeded" value={metricsLoading ? '...' : metrics.succeededSyncs} icon={CheckCircle} color="green" />

@@ -1,3 +1,4 @@
+require('./db/sqlitePatch');
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -10,6 +11,7 @@ const destinationsRouter = require('./routes/destinations');
 const connectionsRouter = require('./routes/connections');
 const syncsRouter = require('./routes/syncs');
 const metricsRouter = require('./routes/metrics');
+const catalogRouter = require('./routes/catalog');
 
 const { startWorker } = require('./workers/syncWorker');
 const { startScheduler } = require('./services/schedulerService');
@@ -25,6 +27,7 @@ app.use('/api/connectors', connectorsRouter);
 app.use('/api/destinations', destinationsRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/syncs', syncsRouter);
+app.use('/api/catalog', catalogRouter);
 app.use('/api', metricsRouter);
 app.use('/', metricsRouter);
 

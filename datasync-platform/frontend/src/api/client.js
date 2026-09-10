@@ -42,3 +42,10 @@ export const getUsage = () => api.get('/usage');
 export const getTransformations = () => api.get('/transformations');
 export const runTransformation = (id) => api.post(`/transformations/${id}/run`);
 
+export const getConnectionData = (id) => api.get(`/connections/${id}/data`);
+export const insertConnectionRecord = (id, data) => api.post(`/connections/${id}/insert-record`, data);
+export const getDestinationTables = (id) => api.get(`/destinations/${id}/tables`);
+export const getDestinationTableData = (id, table) => api.get(`/destinations/${id}/tables/${table}/data`);
+export const queryDestinationWarehouse = (id, sql) => api.post(`/destinations/${id}/query`, { sql });
+
+

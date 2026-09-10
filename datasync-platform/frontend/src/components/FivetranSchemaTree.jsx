@@ -2,7 +2,49 @@ import React, { useState } from 'react';
 import { Key, Shield, Check, ChevronDown, ChevronRight, Lock, Sparkles, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export const FivetranSchemaTree = ({ schema, onSaveSchema, isSaving }) => {
-  // Mock tables if schema is string or empty
+  // Parse real schema if provided, or provide defaults
+  const parsedTables = React.useMemo(() => {
+    if (!schema) return null;
+    try {
+      const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
+      if (parsed.streams && parsed.streams.length > 0) {
+        return parsed.streams.map(stream => {
+          const props = stream.jsonSchema?.properties || {};
+          const pk = stream.sourceDefinedPrimaryKey?.[0]?.[0] || 'id';
+          return {
+            name: stream.name,
+            enabled: true,
+            estimated_rows: '1,000+',
+            columns: Object.entries(props).map(([name, def]) => ({
+              name,
+              type: (def.type || 'string').toUpperCase(),
+              is_primary_key: name === pk,
+              enabled: true,
+              is_hashed: name.includes('email') || name.includes('password')
+            }))
+          };
+        });
+      }
+      if (parsed.columns && parsed.columns.length > 0) {
+        return [{
+          name: parsed.table || 'source_table',
+          enabled: true,
+          estimated_rows: '1,000+',
+          columns: parsed.columns.map(col => ({
+            name: col.name,
+            type: (col.type || 'TEXT').toUpperCase(),
+            is_primary_key: col.name === 'id',
+            enabled: true,
+            is_hashed: col.name.includes('email')
+          }))
+        }];
+      }
+    } catch (e) {
+      console.error('Failed to parse schema:', e);
+    }
+    return null;
+  }, [schema]);
+
   const defaultTables = [
     {
       name: 'users',
@@ -45,8 +87,13 @@ export const FivetranSchemaTree = ({ schema, onSaveSchema, isSaving }) => {
     }
   ];
 
-  const [tables, setTables] = useState(defaultTables);
-  const [expandedTables, setExpandedTables] = useState({ users: true, orders: true, products: false });
+  const [tables, setTables] = useState(parsedTables || defaultTables);
+
+  React.useEffect(() => {
+    if (parsedTables) setTables(parsedTables);
+  }, [parsedTables]);
+
+  const [expandedTables, setExpandedTables] = useState({ [tables[0]?.name || 'users']: true });
   const [hasChanges, setHasChanges] = useState(false);
 
   const toggleTableExpand = (tableName) => {

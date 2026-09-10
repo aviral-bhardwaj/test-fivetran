@@ -82,4 +82,126 @@ router.delete('/:id', (req, res, next) => {
   }
 });
 
+// List all actual tables in this destination warehouse
+router.get('/:id/tables', (req, res, next) => {
+  try {
+    const Database = require('better-sqlite3');
+    const fs = require('fs');
+    const path = require('path');
+
+    const dest = db.prepare('SELECT * FROM destinations WHERE id = ?').get(req.params.id);
+    if (!dest) return res.status(404).json({ error: 'Destination not found' });
+
+    const config = JSON.parse(dest.config || '{}');
+
+    if (dest.type === 'sqlite_warehouse' || dest.type === 'duckdb' || dest.type === 'snowflake' || dest.type === 'bigquery' || dest.type === 'postgres') {
+      const whPath = path.resolve(config.dbPath || './data/warehouse.db');
+      if (!fs.existsSync(whPath)) {
+        return res.json({ destination: dest.name, tables: [] });
+      }
+
+      const wh = new Database(whPath);
+      const tableNames = wh.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+
+      const tables = tableNames.map(name => {
+        try {
+          const count = wh.prepare(`SELECT COUNT(*) as c FROM "${name}"`).get().c;
+          const cols = wh.prepare(`PRAGMA table_info("${name}")`).all().map(c => ({ name: c.name, type: c.type }));
+          return { name, row_count: count, columns: cols };
+        } catch {
+          return { name, row_count: 0, columns: [] };
+        }
+      });
+
+      return res.json({ destination: dest.name, db_path: whPath, tables });
+    }
+
+    // Local file destination
+    const outDir = path.resolve(config.outputDir || './data/syncs');
+    if (!fs.existsSync(outDir)) {
+      return res.json({ destination: dest.name, tables: [] });
+    }
+
+    const files = fs.readdirSync(outDir).filter(f => f.endsWith('.jsonl'));
+    const tables = files.map(file => {
+      try {
+        const content = fs.readFileSync(path.join(outDir, file), 'utf-8').trim();
+        const lines = content ? content.split('\n').length : 0;
+        return { name: file, row_count: lines, file_path: path.join(outDir, file) };
+      } catch {
+        return { name: file, row_count: 0 };
+      }
+    });
+
+    res.json({ destination: dest.name, output_dir: outDir, tables });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Fetch table data or query destination warehouse
+router.get('/:id/tables/:table/data', (req, res, next) => {
+  try {
+    const Database = require('better-sqlite3');
+    const fs = require('fs');
+    const path = require('path');
+
+    const dest = db.prepare('SELECT * FROM destinations WHERE id = ?').get(req.params.id);
+    if (!dest) return res.status(404).json({ error: 'Destination not found' });
+
+    const config = JSON.parse(dest.config || '{}');
+    const tableName = req.params.table;
+
+    if (dest.type === 'sqlite_warehouse' || dest.type === 'duckdb' || dest.type === 'snowflake' || dest.type === 'bigquery' || dest.type === 'postgres') {
+      const whPath = path.resolve(config.dbPath || './data/warehouse.db');
+      if (!fs.existsSync(whPath)) return res.json({ table: tableName, rows: [], total: 0 });
+
+      const wh = new Database(whPath);
+      const total = wh.prepare(`SELECT COUNT(*) as c FROM "${tableName}"`).get().c;
+      const rows = wh.prepare(`SELECT * FROM "${tableName}" LIMIT 100`).all();
+      return res.json({ table: tableName, total, rows });
+    }
+
+    // Local file
+    const outDir = path.resolve(config.outputDir || './data/syncs');
+    const filePath = path.join(outDir, tableName);
+    if (!fs.existsSync(filePath)) return res.json({ table: tableName, rows: [], total: 0 });
+
+    const content = fs.readFileSync(filePath, 'utf-8').trim();
+    const rows = content ? content.split('\n').map(l => JSON.parse(l)) : [];
+    res.json({ table: tableName, total: rows.length, rows: rows.slice(0, 100) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Run analytical SQL query against destination warehouse
+router.post('/:id/query', (req, res, next) => {
+  try {
+    const Database = require('better-sqlite3');
+    const fs = require('fs');
+    const path = require('path');
+
+    const dest = db.prepare('SELECT * FROM destinations WHERE id = ?').get(req.params.id);
+    if (!dest) return res.status(404).json({ error: 'Destination not found' });
+
+    const { sql } = req.body;
+    if (!sql || typeof sql !== 'string') {
+      return res.status(400).json({ error: 'SQL query string required' });
+    }
+
+    const config = JSON.parse(dest.config || '{}');
+    const whPath = path.resolve(config.dbPath || './data/warehouse.db');
+    if (!fs.existsSync(whPath)) {
+      return res.status(400).json({ error: 'Warehouse database has not been initialized yet. Run a sync first.' });
+    }
+
+    const wh = new Database(whPath);
+    const results = wh.prepare(sql).all();
+    res.json({ sql, rows_count: results.length, rows: results });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 module.exports = router;

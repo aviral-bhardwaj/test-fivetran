@@ -10,6 +10,7 @@ import { ConnectorIcon } from '../components/ConnectorIcons';
 import { FivetranSchemaTree } from '../components/FivetranSchemaTree';
 import { SetupTestsRunner } from '../components/SetupTestsRunner';
 import TerminalLogViewer from '../components/TerminalLogViewer';
+import { WarehouseDataExplorer } from '../components/WarehouseDataExplorer';
 import { useToast } from '../hooks/useToast';
 
 const ConnectionDetail = () => {
@@ -94,6 +95,7 @@ const ConnectionDetail = () => {
 
   const tabs = [
     { id: 'status', label: 'Status' },
+    { id: 'data', label: 'Warehouse Data Explorer', badge: 'Live Rows' },
     { id: 'schema', label: 'Schema' },
     { id: 'alerts', label: 'Alerts', badge: '1' },
     { id: 'history', label: 'Historical Syncs' },
@@ -264,6 +266,14 @@ const ConnectionDetail = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Warehouse Data Explorer Tab */}
+      {activeTab === 'data' && (
+        <WarehouseDataExplorer
+          connectionId={id}
+          destinationId={connection.destination_id}
+        />
       )}
 
       {/* Schema Tab */}

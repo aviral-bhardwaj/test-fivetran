@@ -273,7 +273,9 @@ class UniversalAirbyteSource {
       }))
     };
 
-    let rows = def.generate();
+    const baseRows = def.generate ? def.generate() : [];
+    const customRows = (global.__customSourceRecords && global.__customSourceRecords[tableName]) || [];
+    let rows = [...baseRows, ...customRows];
     let nextCursor = cursor;
 
     if ((mode === 'incremental' || mode === 'incremental_append' || mode === 'incremental_deduped') && incrementalKey) {
@@ -299,5 +301,14 @@ class UniversalAirbyteSource {
     return { rows, nextCursor, totalRows: rows.length };
   }
 }
+
+UniversalAirbyteSource.insertCustomRecord = function(tableName, record) {
+  global.__customSourceRecords = global.__customSourceRecords || {};
+  if (!global.__customSourceRecords[tableName]) {
+    global.__customSourceRecords[tableName] = [];
+  }
+  global.__customSourceRecords[tableName].push(record);
+  return record;
+};
 
 module.exports = UniversalAirbyteSource;

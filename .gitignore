@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+control_plane.db
+test_control_plane.db
+test_source.db

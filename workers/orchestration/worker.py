@@ -24,7 +24,7 @@ def run_once() -> bool:
             if next_state is not None:
                 connection = db.get(Connection, job.connection_id)
                 if connection:
-                    connection.state_json = next_state
+                    connection.state_json = {**(connection.state_json or {}), **next_state}
                     db.add(connection)
             mark_job_succeeded(db, job, rows_synced=rows, message=message)
             inc("sync_jobs_succeeded_total")

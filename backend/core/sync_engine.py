@@ -23,9 +23,8 @@ def run_sync_job(db: Session, job: SyncJob) -> tuple[int, str, dict | None]:
 
     next_state = None
     if mode == "incremental":
-        next_state = {**state}
-        if next_cursor is not None:
-            next_state["cursor"] = next_cursor
+        if next_cursor is not None and next_cursor != cursor:
+            next_state = {**state, "cursor": next_cursor}
 
     if loaded > 0:
         inc("rows_synced_total", loaded)

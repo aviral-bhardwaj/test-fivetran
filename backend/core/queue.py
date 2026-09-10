@@ -79,6 +79,7 @@ def mark_job_failed(db: Session, job: SyncJob, message: str) -> SyncJob:
         backoff_minutes = 2 ** job.attempts
         job.status = "pending"
         job.run_at = now + timedelta(minutes=backoff_minutes)
+        job.started_at = None
     job.message = message
     db.commit()
     db.refresh(job)

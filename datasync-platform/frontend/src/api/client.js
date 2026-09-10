@@ -37,6 +37,8 @@ export const getMetrics = () => api.get('/metrics');
 export const getSourceCatalog = (params) => api.get('/catalog/sources', { params });
 export const getSourceSpec = (id) => api.get(`/catalog/sources/${id}/spec`);
 export const getDestinationCatalog = (params) => api.get('/catalog/destinations', { params });
-export const getDestinationSpec = (id) => api.get(`/catalog/destinations/${id}/spec`);
 export const getSyncLogs = (id) => api.get(`/syncs/${id}/logs`);
+export const getUsage = () => api.get('/usage');
+export const getTransformations = () => api.get('/transformations');
+export const runTransformation = (id) => api.post(`/transformations/${id}/run`);
 

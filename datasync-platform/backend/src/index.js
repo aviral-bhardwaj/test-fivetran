@@ -12,6 +12,8 @@ const connectionsRouter = require('./routes/connections');
 const syncsRouter = require('./routes/syncs');
 const metricsRouter = require('./routes/metrics');
 const catalogRouter = require('./routes/catalog');
+const usageRouter = require('./routes/usage');
+const transformationsRouter = require('./routes/transformations');
 
 const { startWorker } = require('./workers/syncWorker');
 const { startScheduler } = require('./services/schedulerService');
@@ -28,6 +30,8 @@ app.use('/api/destinations', destinationsRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/syncs', syncsRouter);
 app.use('/api/catalog', catalogRouter);
+app.use('/api/transformations', transformationsRouter);
+app.use('/api', usageRouter);
 app.use('/api', metricsRouter);
 app.use('/', metricsRouter);
 

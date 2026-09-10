@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSourceCatalog, getDestinationCatalog, createConnector, createDestination, testConnector } from '../api/client';
+import { getSourceCatalog, getDestinationCatalog, createConnector, createDestination } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
 import DynamicForm from '../components/DynamicForm';
-import { Search, Database, Globe, FileText, Layers, Zap, Plus, CheckCircle, ExternalLink, Sparkles } from 'lucide-react';
+import { Search, Database, Globe, FileText, Layers, Zap, Plus, CheckCircle, Sparkles, Clock, ShieldCheck } from 'lucide-react';
+import { ConnectorIcon } from '../components/ConnectorIcons';
 
 const CATEGORIES = [
-  { id: 'all', label: 'All Connectors', icon: Sparkles },
+  { id: 'all', label: 'All Connectors (500+)', icon: Sparkles },
   { id: 'database', label: 'Databases', icon: Database },
-  { id: 'api', label: 'Cloud APIs & SaaS', icon: Globe },
-  { id: 'file', label: 'Files & Storage', icon: FileText },
-  { id: 'warehouse', label: 'Data Warehouses', icon: Layers },
-  { id: 'vector', label: 'AI & Vector DBs', icon: Zap },
+  { id: 'api', label: 'Applications & SaaS', icon: Globe },
+  { id: 'file', label: 'Files & Cloud Storage', icon: FileText },
+  { id: 'warehouse', label: 'Destinations & Warehouses', icon: Layers },
 ];
 
 export default function ConnectorCatalog() {
@@ -39,7 +39,7 @@ export default function ConnectorCatalog() {
         ]);
         setSources(srcRes.data || []);
         setDestinations(destRes.data || []);
-      } catch (err) {
+      } catch {
         addToast('Failed to load connector catalog', 'error');
       } finally {
         setLoading(false);
@@ -49,19 +49,19 @@ export default function ConnectorCatalog() {
   }, []);
 
   const allConnectors = [
-    ...sources.map(s => ({ ...s, kind: 'source' })),
-    ...destinations.map(d => ({ ...d, kind: 'destination' }))
+    ...sources.map(s => ({ ...s, kind: 'source', tier: 'Fivetran Standard' })),
+    ...destinations.map(d => ({ ...d, kind: 'destination', tier: 'Destination' }))
   ];
 
   const filteredConnectors = allConnectors.filter(c => {
     const matchesCategory = activeTab === 'all' || c.category === activeTab;
-    const matchesSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.description.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.description || '').toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
   const handleOpenSetup = (connector) => {
     setSelectedConnector(connector);
-    setCustomName(`My ${connector.name}`);
+    setCustomName(`${connector.name} Production`);
     setIsModalOpen(true);
   };
 
@@ -70,19 +70,19 @@ export default function ConnectorCatalog() {
     setIsSubmitting(true);
     try {
       if (selectedConnector.kind === 'source') {
-        const res = await createConnector({
+        await createConnector({
           organization_id: 1,
-          name: customName || `My ${selectedConnector.name}`,
+          name: customName || `${selectedConnector.name} Production`,
           type: selectedConnector.id,
           config: formData
         });
-        addToast(`${selectedConnector.name} source configured successfully!`, 'success');
+        addToast(`${selectedConnector.name} connector created successfully!`, 'success');
         setIsModalOpen(false);
-        navigate('/connectors');
+        navigate('/');
       } else {
         await createDestination({
           organization_id: 1,
-          name: customName || `My ${selectedConnector.name}`,
+          name: customName || `${selectedConnector.name} Production`,
           type: selectedConnector.id,
           config: formData
         });
@@ -99,37 +99,34 @@ export default function ConnectorCatalog() {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-slate-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/30 rounded-full text-indigo-300 text-xs font-semibold border border-indigo-400/30">
-            <Sparkles className="w-3.5 h-3.5" /> Airbyte Connector Marketplace
+      {/* Fivetran Header Banner */}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-8 shadow-2xs relative overflow-hidden">
+        <div className="max-w-2xl space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-[#0070F3] border border-blue-200">
+            <ShieldCheck className="w-3.5 h-3.5" /> Fivetran Automated Connectors
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Connector Catalog</h1>
-          <p className="text-slate-300 text-sm leading-relaxed">
-            Browse and configure over 20+ pre-built source and destination connectors. Connect your databases, APIs, cloud apps, files, and vector stores in minutes.
+          <h1 className="text-2xl font-black text-[#0F172A] tracking-tight">
+            Connector Directory
+          </h1>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Fivetran builds, maintains, and automatically updates over 500+ zero-maintenance data connectors. From databases and SaaS tools to events and files, replication begins with zero code.
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative z-10 mt-6 max-w-lg">
-          <div className="relative">
-            <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by connector name or technology (e.g. Postgres, Stripe, S3)..."
-              className="w-full pl-11 pr-4 py-2.5 bg-white text-slate-900 rounded-xl text-sm font-medium placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/30 shadow-lg"
-            />
-          </div>
+        {/* Search Input */}
+        <div className="mt-5 max-w-md relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search 500+ connectors (e.g. Postgres, Salesforce, Stripe)..."
+            className="w-full pl-9 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0070F3] focus:bg-white transition-all shadow-2xs"
+          />
         </div>
-
-        {/* Background glow */}
-        <div className="absolute -right-12 -top-12 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
       </div>
 
-      {/* Category Tabs */}
+      {/* Category Pills */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {CATEGORIES.map(cat => {
           const Icon = cat.icon;
@@ -138,9 +135,9 @@ export default function ConnectorCatalog() {
             <button
               key={cat.id}
               onClick={() => setActiveTab(cat.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                isActive
+                  ? 'bg-[#0070F3] text-white shadow-2xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -153,107 +150,90 @@ export default function ConnectorCatalog() {
 
       {/* Connectors Grid */}
       {loading ? (
-        <div className="text-center py-16 text-slate-400">Loading Airbyte Connector Registry...</div>
-      ) : filteredConnectors.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300">
-          <p className="text-slate-500 text-sm">No connectors found matching your search.</p>
+        <div className="p-12 text-center text-xs text-slate-500 font-medium">
+          Loading Fivetran directory...
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredConnectors.map((c) => {
-            const isSource = c.kind === 'source';
-            return (
-              <div 
-                key={`${c.kind}-${c.id}`}
-                className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-indigo-300 transition-all flex flex-col justify-between group"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
-                        {c.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
-                          {c.name}
-                        </h3>
-                        <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-0.5 ${
-                          isSource ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
-                        }`}>
-                          {isSource ? 'Source' : 'Destination'} • {c.category}
-                        </span>
-                      </div>
-                    </div>
-
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                      {c.releaseStage === 'generally_available' ? 'GA' : 'BETA'}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredConnectors.map((c) => (
+            <div
+              key={`${c.kind}-${c.id}`}
+              className="fivetran-card p-5 flex flex-col justify-between hover:shadow-md hover:border-[#0070F3]/40 group transition-all"
+            >
+              <div>
+                {/* Brand icon and tier badges */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <ConnectorIcon type={c.id} className="w-11 h-11 shadow-2xs" />
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                      {c.tier}
+                    </span>
+                    <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                      14-Day Free Trial
                     </span>
                   </div>
-
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {c.description}
-                  </p>
                 </div>
 
-                <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
-                  {c.documentationUrl && (
-                    <a
-                      href={c.documentationUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1"
-                    >
-                      Docs <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                  <button
-                    onClick={() => handleOpenSetup(c)}
-                    className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-lg text-xs font-semibold transition-all"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Set Up
-                  </button>
-                </div>
+                <h3 className="font-bold text-sm text-[#0F172A] group-hover:text-[#0070F3] transition-colors">
+                  {c.name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                  {c.description}
+                </p>
               </div>
-            );
-          })}
+
+              <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Setup: ~5 mins</span>
+                </div>
+                <button
+                  onClick={() => handleOpenSetup(c)}
+                  className="fivetran-btn-primary py-1 px-3 text-xs"
+                >
+                  Set Up Connector
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Dynamic Spec Setup Modal */}
-      {selectedConnector && (
+      {/* Setup Modal */}
+      {isModalOpen && selectedConnector && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          title={`Configure ${selectedConnector.name} ${selectedConnector.kind === 'source' ? 'Source' : 'Destination'}`}
-          size="lg"
+          title={`Set Up ${selectedConnector.name}`}
+          size="md"
         >
           <div className="space-y-4">
-            <div className="bg-indigo-50/70 p-3 rounded-lg border border-indigo-100 text-xs text-indigo-900 flex items-start gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <ConnectorIcon type={selectedConnector.id} className="w-10 h-10" />
               <div>
-                <p className="font-semibold">{selectedConnector.name} Specifications</p>
-                <p className="text-indigo-700 mt-0.5">{selectedConnector.description}</p>
+                <h4 className="font-bold text-xs text-slate-900">{selectedConnector.name}</h4>
+                <p className="text-[11px] text-slate-500">Automated zero-maintenance replication</p>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700">Display Name</label>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Connector Destination Name
+              </label>
               <input
                 type="text"
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
                 placeholder="e.g. Production Postgres"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#0070F3]"
               />
             </div>
 
             <DynamicForm
-              spec={selectedConnector.spec}
+              schema={selectedConnector.spec}
               onSubmit={handleCreate}
-              onCancel={() => setIsModalOpen(false)}
-              submitText={`Save & Connect ${selectedConnector.name}`}
-              isSubmitting={isSubmitting}
+              isLoading={isSubmitting}
+              submitText="Save & Run Setup Tests"
             />
           </div>
         </Modal>

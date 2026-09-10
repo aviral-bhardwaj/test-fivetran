@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
@@ -17,28 +17,46 @@ def enqueue_sync(db: Session, connection_id: int, trigger: str = "manual") -> Sy
 
 def reserve_next_job(db: Session) -> SyncJob | None:
     now = datetime.now(timezone.utc)
-    row = db.execute(
-        text(
-            """
-            UPDATE sync_jobs
-            SET status = 'running', started_at = :now
-            WHERE id = (
-                SELECT id
-                FROM sync_jobs
-                WHERE status = 'pending' AND run_at <= :now
-                ORDER BY run_at ASC, id ASC
-                LIMIT 1
-            )
-            RETURNING id
-            """
-        ),
-        {"now": now},
-    ).first()
-    if not row:
-        db.rollback()
-        return None
-    db.commit()
-    return db.get(SyncJob, row[0])
+    if db.bind and db.bind.dialect.name == "sqlite":
+        row = db.execute(
+            text(
+                """
+                UPDATE sync_jobs
+                SET status = 'running', started_at = :now
+                WHERE id = (
+                    SELECT id
+                    FROM sync_jobs
+                    WHERE status = 'pending' AND run_at <= :now
+                    ORDER BY run_at ASC, id ASC
+                    LIMIT 1
+                )
+                RETURNING id
+                """
+            ),
+            {"now": now},
+        ).first()
+        if not row:
+            db.rollback()
+            return None
+        db.commit()
+        return db.get(SyncJob, row[0])
+
+    with db.begin():
+        stmt = (
+            select(SyncJob)
+            .where(SyncJob.status == "pending")
+            .where(SyncJob.run_at <= now)
+            .order_by(SyncJob.run_at.asc(), SyncJob.id.asc())
+            .with_for_update(skip_locked=True)
+        )
+        job = db.execute(stmt).scalars().first()
+        if not job:
+            return None
+        job.status = "running"
+        job.started_at = now
+        db.flush()
+        job_id = job.id
+    return db.get(SyncJob, job_id)
 
 
 def mark_job_succeeded(db: Session, job: SyncJob, rows_synced: int, message: str = "") -> SyncJob:

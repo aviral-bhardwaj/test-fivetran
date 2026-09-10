@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -29,7 +30,10 @@ def client_with_sync_job():
             conn.execute(text("DELETE FROM dest_users"))
             conn.execute(text("INSERT INTO src_users(id, name) VALUES (1, 'alice')"))
 
-        db.execute(text("INSERT INTO organizations(name, created_at) VALUES ('Org', CURRENT_TIMESTAMP)"))
+        db.execute(
+            text("INSERT INTO organizations(name, created_at) VALUES (:name, CURRENT_TIMESTAMP)"),
+            {"name": f"Org-{uuid.uuid4().hex}"},
+        )
         org_id = db.execute(text("SELECT id FROM organizations ORDER BY id DESC LIMIT 1")).first()[0]
         db.execute(
             text(

@@ -10,9 +10,12 @@ from backend.core.models import Connection, Organization, SyncJob
 from backend.core.queue import enqueue_sync
 from backend.core.sync_engine import discover_schema
 
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="Data Platform Control Plane", version="0.1.0")
+
+
+@app.on_event("startup")
+def startup_init_db():
+    Base.metadata.create_all(bind=engine)
 
 
 @app.get("/healthz")

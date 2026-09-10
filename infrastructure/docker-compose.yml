@@ -1,16 +1,28 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: dataplatform
+      POSTGRES_USER: dataplatform
+      POSTGRES_PASSWORD: dataplatform
+    ports:
+      - "5432:5432"
+
   api:
     image: python:3.12-slim
     working_dir: /app
     volumes:
       - ..:/app
     environment:
-      DATAPLATFORM_DATABASE_URL: sqlite:///./control_plane.db
+      DATAPLATFORM_DATABASE_URL: postgresql+psycopg://dataplatform@postgres:5432/dataplatform
+      PGPASSWORD: dataplatform
     command: sh -c "pip install -r requirements.txt && uvicorn backend.api.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
+    depends_on:
+      - postgres
 
   worker:
     image: python:3.12-slim
@@ -18,7 +30,8 @@ services:
     volumes:
       - ..:/app
     environment:
-      DATAPLATFORM_DATABASE_URL: sqlite:///./control_plane.db
+      DATAPLATFORM_DATABASE_URL: postgresql+psycopg://dataplatform@postgres:5432/dataplatform
+      PGPASSWORD: dataplatform
     command: sh -c "pip install -r requirements.txt && python -m workers.orchestration.worker"
     depends_on:
-      - api
+      - postgres

@@ -23,7 +23,6 @@ def run_sync_job(db: Session, job: SyncJob) -> tuple[int, str]:
     if mode == "incremental" and next_cursor is not None:
         connection.state_json = {**state, "cursor": next_cursor}
         db.add(connection)
-        db.commit()
 
     if loaded > 0:
         inc("rows_synced_total", loaded)

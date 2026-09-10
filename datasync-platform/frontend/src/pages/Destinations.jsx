@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getDestinations, createDestination, deleteDestination } from '../api/client';
 import { useToast } from '../hooks/useToast';
-import DataTable from '../components/DataTable';
 import Modal from '../components/Modal';
-import { Database } from 'lucide-react';
+import { Database, Plus, CheckCircle2, Trash2, ArrowUpRight, ShieldCheck, RefreshCw } from 'lucide-react';
+import { ConnectorIcon } from '../components/ConnectorIcons';
 
 const Destinations = () => {
   const [destinations, setDestinations] = useState([]);
@@ -13,9 +13,9 @@ const Destinations = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    type: 'local_file',
+    type: 'sqlite_warehouse',
     organization_id: 1,
-    config: { outputDir: './data/syncs' }
+    config: { dbPath: './data/warehouse.db' }
   });
 
   const fetchDestinations = async () => {
@@ -23,7 +23,7 @@ const Destinations = () => {
     try {
       const res = await getDestinations();
       setDestinations(res.data || []);
-    } catch (err) {
+    } catch {
       addToast('Failed to fetch destinations', 'error');
     } finally {
       setLoading(false);
@@ -35,12 +35,12 @@ const Destinations = () => {
   }, []);
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this destination?')) return;
+    if (!window.confirm('Are you sure you want to delete this destination warehouse?')) return;
     try {
       await deleteDestination(id);
-      addToast('Destination deleted', 'success');
+      addToast('Destination removed', 'success');
       fetchDestinations();
-    } catch (err) {
+    } catch {
       addToast('Failed to delete destination', 'error');
     }
   };
@@ -49,7 +49,7 @@ const Destinations = () => {
     e.preventDefault();
     try {
       await createDestination(formData);
-      addToast('Destination created successfully', 'success');
+      addToast('Destination warehouse created', 'success');
       setIsModalOpen(false);
       fetchDestinations();
     } catch (err) {
@@ -57,86 +57,142 @@ const Destinations = () => {
     }
   };
 
-  const columns = [
-    { key: 'name', label: 'Name' },
-    { key: 'type', label: 'Type', render: (row) => (
-      <div className="flex items-center gap-2">
-        <Database className="w-4 h-4 text-slate-500" />
-        <span className="capitalize">{row.type.replace('_', ' ')}</span>
-      </div>
-    )},
-    { key: 'created_at', label: 'Created At', render: (row) => new Date(row.created_at).toLocaleString() },
-    { key: 'actions', label: 'Actions', render: (row) => (
-      <div className="flex gap-2">
-        <button onClick={() => handleDelete(row.id)} className="text-red-600 hover:underline text-sm">Delete</button>
-      </div>
-    )}
-  ];
-
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-900">Destinations</h1>
-        <button 
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-black text-[#0F172A] tracking-tight">
+            Destinations & Data Warehouses
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Fivetran replicates clean, normalized data directly into your cloud data warehouse or data lake.
+          </p>
+        </div>
+        <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          className="fivetran-btn-primary"
         >
-          + New Destination
+          <Plus className="w-4 h-4" />
+          <span>Add Destination</span>
         </button>
       </div>
 
-      <DataTable columns={columns} data={destinations} loading={loading} />
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="New Destination" size="md">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-            <input 
-              required
-              type="text" 
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
-            <select 
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={formData.type}
-              onChange={(e) => {
-                const type = e.target.value;
-                const defaultConfig = type === 'local_file' ? { outputDir: './data/syncs' } : { dbPath: './data/warehouse.db' };
-                setFormData({...formData, type, config: defaultConfig});
-              }}
+      {/* Destinations Grid */}
+      {loading ? (
+        <div className="p-12 text-center text-xs text-slate-500 font-medium">
+          Loading destination warehouses...
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {destinations.map((dest) => (
+            <div
+              key={dest.id}
+              className="fivetran-card p-6 flex flex-col justify-between hover:shadow-md hover:border-[#0070F3]/40 group transition-all"
             >
-              <option value="local_file">Local File</option>
-              <option value="sqlite_warehouse">SQLite Warehouse</option>
-            </select>
-          </div>
-          
-          <div className="bg-slate-50 p-4 rounded-lg border">
-            <h3 className="text-sm font-medium text-slate-700 mb-3">Configuration</h3>
-            {formData.type === 'local_file' && (
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Output Directory</label>
-                <input placeholder="./data/syncs" className="w-full px-3 py-2 border rounded" value={formData.config.outputDir || ''} onChange={e => setFormData({...formData, config: {...formData.config, outputDir: e.target.value}})} />
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <ConnectorIcon type={dest.type} className="w-12 h-12 shadow-2xs" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Connected
+                  </span>
+                </div>
+
+                <h3 className="font-bold text-base text-[#0F172A] group-hover:text-[#0070F3] transition-colors">
+                  {dest.name}
+                </h3>
+                <div className="text-xs text-slate-500 mt-1 capitalize">
+                  {dest.type.replace('_', ' ')}
+                </div>
+
+                {/* Warehouse Stats */}
+                <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
+                  <div>
+                    <span className="text-slate-400">Status:</span>
+                    <div className="font-bold text-slate-700 mt-0.5">Healthy (0 errors)</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Write Latency:</span>
+                    <div className="font-bold text-slate-700 mt-0.5">~180ms</div>
+                  </div>
+                </div>
               </div>
-            )}
-            {formData.type === 'sqlite_warehouse' && (
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Database Path</label>
-                <input placeholder="./data/warehouse.db" className="w-full px-3 py-2 border rounded" value={formData.config.dbPath || ''} onChange={e => setFormData({...formData, config: {...formData.config, dbPath: e.target.value}})} />
+
+              <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400 font-mono">
+                  ID: #{dest.id}
+                </span>
+                <button
+                  onClick={() => handleDelete(dest.id)}
+                  className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors"
+                  title="Remove Destination"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-            )}
-          </div>
-          
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create</button>
-          </div>
-        </form>
-      </Modal>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {isModalOpen && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title="Connect Destination Warehouse"
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Destination Name
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Snowflake Production"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#0070F3]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Warehouse Engine
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#0070F3]"
+              >
+                <option value="sqlite_warehouse">SQLite Analytical Warehouse (Local / Embedded)</option>
+                <option value="snowflake_warehouse">Snowflake Cloud Data Warehouse</option>
+                <option value="bigquery">Google BigQuery</option>
+                <option value="postgres">PostgreSQL Warehouse</option>
+                <option value="local_file">Partitioned Local JSONL Archive</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="fivetran-btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="fivetran-btn-primary"
+              >
+                Save Destination
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

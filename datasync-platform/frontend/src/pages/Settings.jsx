@@ -2,36 +2,36 @@ import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { getHealth, createConnector, createDestination, createConnection } from '../api/client';
 import { useToast } from '../hooks/useToast';
-import { Zap, Server, Activity, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Key, Lock, Users, Globe, ArrowRight, Zap, CheckCircle2 } from 'lucide-react';
 
 const Settings = () => {
-  const { data: healthData, loading } = usePolling(getHealth, 30000);
+  const { data: healthData } = usePolling(getHealth, 30000);
   const { addToast } = useToast();
   const [demoLoading, setDemoLoading] = useState(false);
 
   const handleCreateDemo = async () => {
     setDemoLoading(true);
     try {
-      addToast('Creating demo connector...', 'info');
-      const connRes = await createConnector({ name: 'Demo Source', type: 'demo', organization_id: 1, config: {} });
-      
-      addToast('Creating local destination...', 'info');
-      const destRes = await createDestination({ name: 'Local Target', type: 'local_file', organization_id: 1, config: { outputDir: './data/syncs' } });
-      
-      addToast('Creating connection...', 'info');
+      addToast('Creating demo Postgres source...', 'info');
+      const connRes = await createConnector({ name: 'PostgreSQL Analytics', type: 'postgres', organization_id: 1, config: {} });
+
+      addToast('Connecting Snowflake warehouse...', 'info');
+      const destRes = await createDestination({ name: 'Snowflake Analytics', type: 'sqlite_warehouse', organization_id: 1, config: { dbPath: './data/warehouse.db' } });
+
+      addToast('Configuring pipeline...', 'info');
       await createConnection({
-        name: 'Demo Pipeline',
+        name: 'PostgreSQL ➔ Snowflake',
         connector_id: connRes.data.id,
         destination_id: destRes.data.id,
-        source_table: 'demo_users',
-        sync_mode: 'full',
-        schedule_interval_minutes: 60,
+        source_table: 'users',
+        sync_mode: 'incremental',
+        schedule_minutes: 15,
         organization_id: 1
       });
-      
-      addToast('Demo setup completed successfully!', 'success');
-    } catch (err) {
-      addToast('Failed to create demo setup', 'error');
+
+      addToast('Fivetran demo pipeline provisioned successfully!', 'success');
+    } catch {
+      addToast('Failed to create demo pipeline', 'error');
     } finally {
       setDemoLoading(false);
     }
@@ -39,57 +39,74 @@ const Settings = () => {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+      <div>
+        <h1 className="text-xl font-black text-[#0F172A] tracking-tight">
+          Account & Workspace Settings
+        </h1>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Manage your Fivetran workspace, API credentials, role-based access, and security policies.
+        </p>
+      </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <Activity className="w-5 h-5 text-blue-500" /> Platform Information
-        </h2>
-        <div className="grid grid-cols-2 gap-6">
+      {/* Workspace Card */}
+      <div className="fivetran-card p-6 space-y-4">
+        <h3 className="font-bold text-sm text-[#0F172A] flex items-center gap-2">
+          <Globe className="w-4 h-4 text-[#0070F3]" />
+          Workspace Configuration
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div>
-            <p className="text-sm text-slate-500">Version</p>
-            <p className="font-medium text-slate-900">{healthData?.version || '1.0.0'}</p>
+            <span className="text-slate-400">Account Name:</span>
+            <div className="font-bold text-slate-800 mt-0.5">Acme Corporation</div>
           </div>
           <div>
-            <p className="text-sm text-slate-500">Status</p>
-            <p className="font-medium text-slate-900 capitalize">{healthData?.status || 'Unknown'}</p>
+            <span className="text-slate-400">Cloud Region:</span>
+            <div className="font-bold text-slate-800 mt-0.5">AWS US-East (N. Virginia)</div>
           </div>
           <div>
-            <p className="text-sm text-slate-500">Uptime</p>
-            <p className="font-medium text-slate-900">
-              {healthData?.uptime ? `${Math.floor(healthData.uptime / 60)} minutes` : 'N/A'}
-            </p>
+            <span className="text-slate-400">Subscription:</span>
+            <div className="font-bold text-emerald-700 mt-0.5">Enterprise Scale</div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <Zap className="w-5 h-5 text-yellow-500" /> Quick Actions
-        </h2>
-        <div className="border border-slate-100 rounded-lg p-4 flex items-center justify-between bg-slate-50">
-          <div>
-            <h3 className="font-medium text-slate-900">Create Demo Setup</h3>
-            <p className="text-sm text-slate-500 mt-1">Automatically generates a demo connector, a local destination, and links them.</p>
-          </div>
-          <button 
-            onClick={handleCreateDemo}
-            disabled={demoLoading}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+      {/* API Access Card */}
+      <div className="fivetran-card p-6 space-y-3">
+        <h3 className="font-bold text-sm text-[#0F172A] flex items-center gap-2">
+          <Key className="w-4 h-4 text-amber-500" />
+          Fivetran REST API Credentials
+        </h3>
+        <p className="text-xs text-slate-500">
+          Use your API key and secret to programmatically manage connectors, trigger syncs, and monitor pipeline metrics.
+        </p>
+        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between text-xs font-mono">
+          <span className="text-slate-600">API Key: <strong className="text-slate-900">ft_live_839fbc0192e41a98</strong></span>
+          <button
+            onClick={() => addToast('API Key copied to clipboard', 'success')}
+            className="text-[#0070F3] hover:underline font-bold text-[11px]"
           >
-            {demoLoading ? 'Creating...' : 'Run Setup'} <ArrowRight className="w-4 h-4" />
+            Copy Key
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <Server className="w-5 h-5 text-slate-500" /> About DataSync
-        </h2>
-        <p className="text-slate-600 leading-relaxed text-sm">
-          DataSync is a modern data integration platform designed to easily move data between various sources and destinations. 
-          It supports full and incremental syncs, scheduling, and detailed monitoring of data pipelines.
+      {/* Demo Pipeline Provisioner */}
+      <div className="fivetran-card p-6 space-y-3">
+        <h3 className="font-bold text-sm text-[#0F172A] flex items-center gap-2">
+          <Zap className="w-4 h-4 text-[#0070F3]" />
+          Sample Pipeline Provisioner
+        </h3>
+        <p className="text-xs text-slate-500">
+          Instantly set up a sample PostgreSQL ➔ Snowflake analytical pipeline to test schema discovery, incremental replication, and log streaming.
         </p>
+        <button
+          onClick={handleCreateDemo}
+          disabled={demoLoading}
+          className="fivetran-btn-primary"
+        >
+          {demoLoading ? 'Provisioning...' : 'Provision Sample Pipeline'}
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
   );

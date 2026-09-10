@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.schemas import ConnectionCreate, ConnectionOut, OrganizationCreate, OrganizationOut, SyncOut
 from backend.core.db import Base, engine, get_db
-from backend.core.metrics import inc, render_prometheus
+from backend.core.metrics import render_prometheus
 from backend.core.models import Connection, Organization, SyncJob
 from backend.core.queue import enqueue_sync
 from backend.core.sync_engine import discover_schema
@@ -79,16 +79,3 @@ def get_sync(sync_id: int, db: Session = Depends(get_db)):
 def list_connection_syncs(connection_id: int, db: Session = Depends(get_db)):
     stmt = select(SyncJob).where(SyncJob.connection_id == connection_id).order_by(SyncJob.id.desc())
     return list(db.execute(stmt).scalars().all())
-
-
-@app.post("/syncs/{sync_id}/mark-succeeded")
-def mark_sync_succeeded(sync_id: int, rows_synced: int = 0, db: Session = Depends(get_db)):
-    job = db.get(SyncJob, sync_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Sync not found")
-    job.status = "succeeded"
-    job.rows_synced = rows_synced
-    db.add(job)
-    db.commit()
-    inc("sync_jobs_succeeded_total")
-    return {"ok": True}

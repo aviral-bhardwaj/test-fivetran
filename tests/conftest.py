@@ -21,6 +21,14 @@ def setup_db():
 def client_with_sync_job():
     db = SessionLocal()
     try:
+        source_engine = create_engine("sqlite:///./test_source.db")
+        with source_engine.begin() as conn:
+            conn.execute(text("CREATE TABLE IF NOT EXISTS src_users (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS dest_users (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text("DELETE FROM src_users"))
+            conn.execute(text("DELETE FROM dest_users"))
+            conn.execute(text("INSERT INTO src_users(id, name) VALUES (1, 'alice')"))
+
         db.execute(text("INSERT INTO organizations(name, created_at) VALUES ('Org', CURRENT_TIMESTAMP)"))
         org_id = db.execute(text("SELECT id FROM organizations ORDER BY id DESC LIMIT 1")).first()[0]
         db.execute(
@@ -39,8 +47,8 @@ def client_with_sync_job():
             ),
             {
                 "org_id": org_id,
-                "source_cfg": '{"dsn":"sqlite:///./test_source.db","table":"users"}',
-                "dest_cfg": '{"dsn":"sqlite:///./test_source.db","table":"users"}',
+                "source_cfg": '{"dsn":"sqlite:///./test_source.db","table":"src_users"}',
+                "dest_cfg": '{"dsn":"sqlite:///./test_source.db","table":"dest_users"}',
             },
         )
         connection_id = db.execute(text("SELECT id FROM connections ORDER BY id DESC LIMIT 1")).first()[0]

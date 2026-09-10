@@ -1,12 +1,17 @@
 import json
+import re
 
 import snowflake.connector
 
 from destinations.base import DestinationConnector
 
+TABLE_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
+
 
 class SnowflakeDestinationConnector(DestinationConnector):
     def __init__(self, account: str, user: str, password: str, database: str, schema: str, warehouse: str, table: str):
+        if not TABLE_PATTERN.match(table):
+            raise ValueError("Invalid table name")
         self.account = account
         self.user = user
         self.password = password

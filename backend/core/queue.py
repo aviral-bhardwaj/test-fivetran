@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
@@ -16,21 +16,29 @@ def enqueue_sync(db: Session, connection_id: int, trigger: str = "manual") -> Sy
 
 
 def reserve_next_job(db: Session) -> SyncJob | None:
-    stmt = (
-        select(SyncJob)
-        .where(SyncJob.status == "pending")
-        .where(SyncJob.run_at <= datetime.now(timezone.utc))
-        .order_by(SyncJob.run_at.asc(), SyncJob.id.asc())
-    )
-    job = db.execute(stmt).scalars().first()
-    if not job:
+    now = datetime.now(timezone.utc)
+    row = db.execute(
+        text(
+            """
+            UPDATE sync_jobs
+            SET status = 'running', started_at = :now
+            WHERE id = (
+                SELECT id
+                FROM sync_jobs
+                WHERE status = 'pending' AND run_at <= :now
+                ORDER BY run_at ASC, id ASC
+                LIMIT 1
+            )
+            RETURNING id
+            """
+        ),
+        {"now": now},
+    ).first()
+    if not row:
+        db.rollback()
         return None
-
-    job.status = "running"
-    job.started_at = datetime.now(timezone.utc)
     db.commit()
-    db.refresh(job)
-    return job
+    return db.get(SyncJob, row[0])
 
 
 def mark_job_succeeded(db: Session, job: SyncJob, rows_synced: int, message: str = "") -> SyncJob:

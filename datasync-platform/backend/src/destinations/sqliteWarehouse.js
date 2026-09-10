@@ -12,24 +12,46 @@ class SqliteWarehouseDestination extends DestinationConnector {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     const db = new Database(dbPath);
-    const keys = Object.keys(rows[0]);
-    const cols = keys.map(k => `"${k}" TEXT`).join(', ');
     
-    db.exec(`CREATE TABLE IF NOT EXISTS "${tableName}" (${cols})`);
+    // Check existing table and columns
+    const tableCheck = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(tableName);
+    if (!tableCheck) {
+      const keys = Object.keys(rows[0]);
+      const cols = keys.map(k => `"${k}" TEXT`).join(', ');
+      db.exec(`CREATE TABLE "${tableName}" (${cols})`);
+    } else {
+      // Table exists, check if any columns are missing
+      const existingCols = db.prepare(`PRAGMA table_info("${tableName}")`).all().map(c => c.name);
+      for (const k of Object.keys(rows[0])) {
+        if (!existingCols.includes(k)) {
+          try {
+            db.exec(`ALTER TABLE "${tableName}" ADD COLUMN "${k}" TEXT`);
+          } catch (e) {
+            // column might already exist or ignore
+          }
+        }
+      }
+    }
 
-    const placeholders = keys.map(() => '?').join(', ');
-    const stmt = db.prepare(`INSERT INTO "${tableName}" (${keys.map(k => `"${k}"`).join(', ')}) VALUES (${placeholders})`);
+    // Now get all available columns in table
+    const tableCols = db.prepare(`PRAGMA table_info("${tableName}")`).all().map(c => c.name);
+    // Keys to insert
+    const insertKeys = tableCols.filter(c => rows.some(r => r[c] !== undefined));
+    const activeKeys = insertKeys.length > 0 ? insertKeys : tableCols;
+
+    const placeholders = activeKeys.map(() => '?').join(', ');
+    const stmt = db.prepare(`INSERT INTO "${tableName}" (${activeKeys.map(k => `"${k}"`).join(', ')}) VALUES (${placeholders})`);
 
     const transaction = db.transaction((rowsToInsert) => {
       for (const row of rowsToInsert) {
-        stmt.run(...keys.map(k => String(row[k] || '')));
+        stmt.run(...activeKeys.map(k => row[k] !== undefined && row[k] !== null ? String(row[k]) : ''));
       }
     });
 
     transaction(rows);
     db.close();
 
-    const estimatedSize = rows.length * keys.length * 10; // rough estimate
+    const estimatedSize = rows.length * activeKeys.length * 10;
     return { rowsLoaded: rows.length, bytesWritten: estimatedSize };
   }
 }

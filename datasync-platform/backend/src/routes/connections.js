@@ -309,19 +309,35 @@ router.post('/:id/insert-record', async (req, res, next) => {
 
     if (!conn) return res.status(404).json({ error: 'Connection not found' });
 
-    // Generate realistic custom record
+    let inputData = req.body || {};
+    if (inputData.record && typeof inputData.record === 'object') {
+      inputData = inputData.record;
+    }
+
     const stream = conn.source_table || 'demo_users';
     const timestamp = new Date().toISOString();
-    const customRecord = req.body && Object.keys(req.body).length > 0 ? req.body : {
-      id: Date.now() % 100000,
-      name: `Customer ${Math.floor(Math.random() * 900 + 100)}`,
-      email: `customer.${Date.now() % 10000}@enterprise.com`,
-      city: ['New York', 'San Francisco', 'Chicago', 'Seattle', 'Austin'][Math.floor(Math.random() * 5)],
-      amount: +(Math.random() * 450 + 50).toFixed(2),
-      status: 'completed',
-      signup_date: timestamp,
-      created_at: timestamp
+
+    // Determine default ID higher than current cursor
+    const currentCursorNum = Number(conn.cursor_value) || 35;
+    const nextId = (inputData.id !== undefined && inputData.id !== null)
+      ? Number(inputData.id)
+      : Math.max(currentCursorNum + 1, (Date.now() % 100000) + 100);
+
+    const customRecord = {
+      id: nextId,
+      user_id: inputData.user_id || 1,
+      product: inputData.product || inputData.name || `Enterprise Item ${nextId}`,
+      name: inputData.name || inputData.product || `Enterprise Customer ${nextId}`,
+      email: inputData.email || `enterprise.${nextId}@datasync.io`,
+      city: inputData.city || 'San Francisco',
+      amount: inputData.amount !== undefined ? Number(inputData.amount) : +(Math.random() * 450 + 50).toFixed(2),
+      status: inputData.status || 'completed',
+      signup_date: inputData.signup_date || timestamp,
+      order_date: inputData.order_date || timestamp,
+      created_at: timestamp,
+      ...inputData
     };
+    customRecord.id = nextId;
 
     UniversalAirbyteSource.insertCustomRecord(stream, customRecord);
 

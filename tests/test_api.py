@@ -1,8 +1,11 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 import uuid
+from sqlalchemy.orm import Session
 
 from backend.api.main import app
+from backend.core.db import SessionLocal
+from backend.core.models import Connection
 
 client = TestClient(app)
 
@@ -63,3 +66,12 @@ def test_discover_schema_persists_state():
     assert discover.status_code == 200
     assert discover.json()["schema"]["table"] == "users"
     assert any(col["name"] == "id" for col in discover.json()["schema"]["columns"])
+
+    db: Session = SessionLocal()
+    try:
+        saved_conn = db.get(Connection, connection_id)
+        assert saved_conn is not None
+        assert "schema" in saved_conn.state_json
+        assert saved_conn.state_json["schema"]["table"] == "users"
+    finally:
+        db.close()

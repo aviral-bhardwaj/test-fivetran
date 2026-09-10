@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     database_url: str = "sqlite:///./control_plane.db"
     max_sync_attempts: int = 3
+    retry_base_delay_seconds: int = 30
     worker_poll_seconds: int = 5
     default_batch_size: int = 1000
 

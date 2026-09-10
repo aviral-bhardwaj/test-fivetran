@@ -75,10 +75,11 @@ def mark_job_failed(db: Session, job: SyncJob, message: str) -> SyncJob:
     if job.attempts >= settings.max_sync_attempts:
         job.status = "failed"
         job.finished_at = now
+        job.started_at = None
     else:
-        backoff_minutes = 2 ** job.attempts
+        backoff_seconds = settings.retry_base_delay_seconds * (2 ** (job.attempts - 1))
         job.status = "pending"
-        job.run_at = now + timedelta(minutes=backoff_minutes)
+        job.run_at = now + timedelta(seconds=backoff_seconds)
         job.started_at = None
     job.message = message
     db.commit()

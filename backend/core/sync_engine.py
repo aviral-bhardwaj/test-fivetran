@@ -23,7 +23,7 @@ def run_sync_job(db: Session, job: SyncJob) -> tuple[int, str, dict | None]:
 
     next_state = None
     if mode == "incremental":
-        if next_cursor is not None and next_cursor != cursor:
+        if next_cursor is not None and next_cursor != cursor and loaded == len(rows):
             next_state = {**state, "cursor": next_cursor}
 
     if loaded > 0:

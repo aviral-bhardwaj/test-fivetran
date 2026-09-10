@@ -59,12 +59,15 @@ def test_worker_marks_failed_after_max_attempts(client_with_sync_job, monkeypatc
             db.commit()
 
         row = db.execute(
-            text("SELECT status, attempts, message FROM sync_jobs WHERE id = :id"),
+            text("SELECT status, attempts, message, started_at, finished_at, run_at FROM sync_jobs WHERE id = :id"),
             {"id": job_id},
         ).first()
         assert row[0] == "failed"
         assert row[1] == settings.max_sync_attempts
         assert "terminal boom" in row[2]
+        assert row[3] is None
+        assert row[4] is not None
+        assert row[5] is not None
     finally:
         db.close()
 

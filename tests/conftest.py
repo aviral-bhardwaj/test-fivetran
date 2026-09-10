@@ -31,12 +31,11 @@ def client_with_sync_job():
             conn.execute(text("DELETE FROM dest_users"))
             conn.execute(text("INSERT INTO src_users(id, name) VALUES (1, 'alice')"))
 
-        db.execute(
-            text("INSERT INTO organizations(name, created_at) VALUES (:name, CURRENT_TIMESTAMP)"),
+        org_id = db.execute(
+            text("INSERT INTO organizations(name, created_at) VALUES (:name, CURRENT_TIMESTAMP) RETURNING id"),
             {"name": f"Org-{uuid.uuid4().hex}"},
-        )
-        org_id = db.execute(text("SELECT id FROM organizations ORDER BY id DESC LIMIT 1")).first()[0]
-        db.execute(
+        ).scalar_one()
+        connection_id = db.execute(
             text(
                 """
                 INSERT INTO connections(
@@ -48,6 +47,7 @@ def client_with_sync_job():
                     'postgres', :dest_cfg, 60, 'full',
                     '{}', CURRENT_TIMESTAMP
                 )
+                RETURNING id
                 """
             ),
             {
@@ -55,10 +55,14 @@ def client_with_sync_job():
                 "source_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"src_users"}}',
                 "dest_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"dest_users"}}',
             },
-        )
-        connection_id = db.execute(text("SELECT id FROM connections ORDER BY id DESC LIMIT 1")).first()[0]
-        db.execute(text("INSERT INTO sync_jobs(connection_id, status, trigger, requested_at, run_at, attempts, rows_synced) VALUES (:id, 'pending', 'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0)"), {"id": connection_id})
-        job_id = db.execute(text("SELECT id FROM sync_jobs ORDER BY id DESC LIMIT 1")).first()[0]
+        ).scalar_one()
+        job_id = db.execute(
+            text(
+                "INSERT INTO sync_jobs(connection_id, status, trigger, requested_at, run_at, attempts, rows_synced) "
+                "VALUES (:id, 'pending', 'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0) RETURNING id"
+            ),
+            {"id": connection_id},
+        ).scalar_one()
         db.commit()
         yield job_id
     finally:
@@ -81,12 +85,11 @@ def incremental_sync_job():
             conn.execute(text("INSERT INTO src_users(id, name) VALUES (1, 'alice')"))
             conn.execute(text("INSERT INTO src_users(id, name) VALUES (2, 'bob')"))
 
-        db.execute(
-            text("INSERT INTO organizations(name, created_at) VALUES (:name, CURRENT_TIMESTAMP)"),
+        org_id = db.execute(
+            text("INSERT INTO organizations(name, created_at) VALUES (:name, CURRENT_TIMESTAMP) RETURNING id"),
             {"name": f"IncOrg-{uuid.uuid4().hex}"},
-        )
-        org_id = db.execute(text("SELECT id FROM organizations ORDER BY id DESC LIMIT 1")).first()[0]
-        db.execute(
+        ).scalar_one()
+        connection_id = db.execute(
             text(
                 """
                 INSERT INTO connections(
@@ -98,6 +101,7 @@ def incremental_sync_job():
                     'postgres', :dest_cfg, 60, 'incremental',
                     :state_json, CURRENT_TIMESTAMP
                 )
+                RETURNING id
                 """
             ),
             {
@@ -106,16 +110,14 @@ def incremental_sync_job():
                 "dest_cfg": f'{{"dsn":"sqlite:///{source_db_file}","table":"dest_users"}}',
                 "state_json": '{"cursor": 0}',
             },
-        )
-        connection_id = db.execute(text("SELECT id FROM connections ORDER BY id DESC LIMIT 1")).first()[0]
-        db.execute(
+        ).scalar_one()
+        job_id = db.execute(
             text(
                 "INSERT INTO sync_jobs(connection_id, status, trigger, requested_at, run_at, attempts, rows_synced) "
-                "VALUES (:id, 'pending', 'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0)"
+                "VALUES (:id, 'pending', 'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0) RETURNING id"
             ),
             {"id": connection_id},
-        )
-        job_id = db.execute(text("SELECT id FROM sync_jobs ORDER BY id DESC LIMIT 1")).first()[0]
+        ).scalar_one()
         db.commit()
         yield job_id, connection_id
     finally:

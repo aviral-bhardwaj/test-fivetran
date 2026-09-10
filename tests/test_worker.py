@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 
@@ -43,7 +43,9 @@ def test_worker_requeues_on_failure(client_with_sync_job, monkeypatch):
         assert row[1] == 1
         assert "boom" in row[2]
         run_at = datetime.fromisoformat(str(row[3]).replace(" ", "T"))
-        assert run_at > datetime.utcnow()
+        if run_at.tzinfo is None:
+            run_at = run_at.replace(tzinfo=timezone.utc)
+        assert run_at > datetime.now(timezone.utc)
     finally:
         db.close()
 

@@ -16,7 +16,7 @@ services:
     volumes:
       - ..:/app
     environment:
-      DATAPLATFORM_DATABASE_URL: postgresql+psycopg://dataplatform@postgres:5432/dataplatform
+      DATAPLATFORM_DATABASE_URL: postgresql+psycopg://dataplatform:${POSTGRES_PASSWORD:-dataplatform}@postgres:5432/dataplatform
       PGPASSWORD: dataplatform
     command: sh -c "pip install -r requirements.txt && uvicorn backend.api.main:app --host 0.0.0.0 --port 8000"
     ports:
@@ -30,7 +30,7 @@ services:
     volumes:
       - ..:/app
     environment:
-      DATAPLATFORM_DATABASE_URL: postgresql+psycopg://dataplatform@postgres:5432/dataplatform
+      DATAPLATFORM_DATABASE_URL: postgresql+psycopg://dataplatform:${POSTGRES_PASSWORD:-dataplatform}@postgres:5432/dataplatform
       PGPASSWORD: dataplatform
     command: sh -c "pip install -r requirements.txt && python -m workers.orchestration.worker"
     depends_on:

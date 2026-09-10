@@ -4,6 +4,7 @@ import time
 from backend.core.config import settings
 from backend.core.db import SessionLocal
 from backend.core.metrics import inc
+from backend.core.models import Connection
 from backend.core.queue import mark_job_failed, mark_job_succeeded, reserve_next_job
 from backend.core.sync_engine import run_sync_job
 
@@ -19,7 +20,12 @@ def run_once() -> bool:
             return False
 
         try:
-            rows, message = run_sync_job(db, job)
+            rows, message, next_state = run_sync_job(db, job)
+            if next_state is not None:
+                connection = db.get(Connection, job.connection_id)
+                if connection:
+                    connection.state_json = next_state
+                    db.add(connection)
             mark_job_succeeded(db, job, rows_synced=rows, message=message)
             inc("sync_jobs_succeeded_total")
             logger.info("Sync %s succeeded (%s rows)", job.id, rows)

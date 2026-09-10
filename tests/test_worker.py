@@ -67,3 +67,16 @@ def test_worker_marks_failed_after_max_attempts(client_with_sync_job, monkeypatc
         assert "terminal boom" in row[2]
     finally:
         db.close()
+
+
+def test_worker_persists_incremental_cursor(incremental_sync_job):
+    db = SessionLocal()
+    try:
+        job_id, connection_id = incremental_sync_job
+        assert run_once() is True
+        job_row = db.execute(text("SELECT status FROM sync_jobs WHERE id = :id"), {"id": job_id}).first()
+        state_row = db.execute(text("SELECT state_json FROM connections WHERE id = :id"), {"id": connection_id}).first()
+        assert job_row[0] == "succeeded"
+        assert '"cursor": 2' in state_row[0]
+    finally:
+        db.close()

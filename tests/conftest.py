@@ -62,3 +62,57 @@ def client_with_sync_job():
         yield job_id
     finally:
         db.close()
+
+
+@pytest.fixture
+def incremental_sync_job():
+    db = SessionLocal()
+    try:
+        source_engine = create_engine("sqlite:///./test_source.db")
+        with source_engine.begin() as conn:
+            conn.execute(text("CREATE TABLE IF NOT EXISTS src_users (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS dest_users (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text("DELETE FROM src_users"))
+            conn.execute(text("DELETE FROM dest_users"))
+            conn.execute(text("INSERT INTO src_users(id, name) VALUES (1, 'alice')"))
+            conn.execute(text("INSERT INTO src_users(id, name) VALUES (2, 'bob')"))
+
+        db.execute(
+            text("INSERT INTO organizations(name, created_at) VALUES (:name, CURRENT_TIMESTAMP)"),
+            {"name": f"IncOrg-{uuid.uuid4().hex}"},
+        )
+        org_id = db.execute(text("SELECT id FROM organizations ORDER BY id DESC LIMIT 1")).first()[0]
+        db.execute(
+            text(
+                """
+                INSERT INTO connections(
+                    organization_id, name, source_type, source_config,
+                    destination_type, destination_config, schedule_minutes, sync_mode,
+                    state_json, created_at
+                ) VALUES (
+                    :org_id, 'inc-conn', 'postgres', :source_cfg,
+                    'postgres', :dest_cfg, 60, 'incremental',
+                    :state_json, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "org_id": org_id,
+                "source_cfg": '{"dsn":"sqlite:///./test_source.db","table":"src_users","incremental_key":"id"}',
+                "dest_cfg": '{"dsn":"sqlite:///./test_source.db","table":"dest_users"}',
+                "state_json": '{"cursor": 0}',
+            },
+        )
+        connection_id = db.execute(text("SELECT id FROM connections ORDER BY id DESC LIMIT 1")).first()[0]
+        db.execute(
+            text(
+                "INSERT INTO sync_jobs(connection_id, status, trigger, requested_at, run_at, attempts, rows_synced) "
+                "VALUES (:id, 'pending', 'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0)"
+            ),
+            {"id": connection_id},
+        )
+        job_id = db.execute(text("SELECT id FROM sync_jobs ORDER BY id DESC LIMIT 1")).first()[0]
+        db.commit()
+        yield job_id, connection_id
+    finally:
+        db.close()
